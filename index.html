@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WILDER | 頂級潮流露營美學</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Space Grotesk & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Canvas Confetti for Checkout Celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <!-- Tailwind 定製配置 -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Space Grotesk', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f4f7f4',
+                            100: '#e3eae3',
+                            500: '#4a6b51', // 森林綠
+                            600: '#3b5540',
+                            800: '#233326',
+                            900: '#172219',
+                        },
+                        amber: {
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 4s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- 自訂過渡與 Canvas 基本樣式 -->
+    <style>
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dark .glassmorphism {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        /* 隱藏滾動條但保持功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* 3D 傾斜卡片平滑動畫 */
+        .tilt-card {
+            transform-style: preserve-3d;
+            perspective: 1000px;
+            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+        }
+        .tilt-card-inner {
+            transform: translateZ(20px);
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-900 dark:bg-[#0b0f12] dark:text-stone-100 font-sans transition-colors duration-500 overflow-x-hidden">
+
+    <script>
+        // 音效合成器類別 (不需下載任何 mp3，純程式碼即時合成營火劈啪聲與微風聲)
+        class CampfireAudioSynth {
+            constructor() {
+                this.ctx = null;
+                this.isPlaying = false;
+                this.windNode = null;
+                this.crackleNode = null;
+                this.mainGain = null;
+            }
+
+            init() {
+                if (this.ctx) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.mainGain = this.ctx.createGain();
+                this.mainGain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                this.mainGain.connect(this.ctx.destination);
+            }
+
+            // 產生白噪音 (風聲的基礎)
+            createWindNode() {
+                const bufferSize = 2 * this.ctx.sampleRate;
+                const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+
+                const whiteNoise = this.ctx.createBufferSource();
+                whiteNoise.buffer = noiseBuffer;
+                whiteNoise.loop = true;
+
+                // 低通濾波器模擬風吹過松林的低鳴
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(400, this.ctx.currentTime);
+                filter.Q.setValueAtTime(2.0, this.ctx.currentTime);
+
+                // 動態風力變化調變
+                const windGain = this.ctx.createGain();
+                windGain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+
+                // 自動隨機改變風吹強度與音調
+                const changeWind = () => {
+                    if (!this.isPlaying) return;
+                    const now = this.ctx.currentTime;
+                    const nextTime = now + 1 + Math.random() * 3;
+                    const nextFreq = 150 + Math.random() * 300;
+                    const nextVol = 0.02 + Math.random() * 0.08;
+                    filter.frequency.exponentialRampToValueAtTime(nextFreq, nextTime);
+                    windGain.gain.linearRampToValueAtTime(nextVol, nextTime);
+                    setTimeout(changeWind, (nextTime - now) * 1000);
+                };
+
+                whiteNoise.connect(filter);
+                filter.connect(windGain);
+                windGain.connect(this.mainGain);
+
+                whiteNoise.start(0);
+                changeWind();
+
+                return { source: whiteNoise, gain: windGain };
+            }
+
+            // 產生營火柴火劈啪聲 (Crackling)
+            createCampfireNode() {
+                const crackleGain = this.ctx.createGain();
+                crackleGain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                crackleGain.connect(this.mainGain);
+
+                // 利用間歇性的隨機脈衝與粉紅噪音產生燃燒劈啪聲
+                const playCrackle = () => {
+                    if (!this.isPlaying) return;
+                    
+                    // 隨機的時間間隔
+                    const delay = 50 + Math.random() * 400;
+
+                    // 建立一個微小的啪嚓聲 (Impulse)
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    
+                    osc.type = 'triangle';
+                    // 頻率突然下降模擬木材爆開聲
+                    osc.frequency.setValueAtTime(800 + Math.random() * 1200, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.02);
+
+                    gain.gain.setValueAtTime(Math.random() * 0.5, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.03);
+
+                    // 帶有一點點失真的高通濾波，讓爆裂聲更清脆
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.setValueAtTime(1200, this.ctx.currentTime);
+
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(crackleGain);
+
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.05);
+
+                    // 同時模擬底層柴火持續的溫暖呼呼聲 (低頻隆隆聲)
+                    const rumbler = this.ctx.createOscillator();
+                    const rGain = this.ctx.createGain();
+                    rumbler.type = 'sawtooth';
+                    rumbler.frequency.setValueAtTime(50 + Math.random() * 20, this.ctx.currentTime);
+                    rGain.gain.setValueAtTime(0.005, this.ctx.currentTime);
+                    rGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+                    
+                    const rFilter = this.ctx.createBiquadFilter();
+                    rFilter.type = 'lowpass';
+                    rFilter.frequency.setValueAtTime(80, this.ctx.currentTime);
+                    
+                    rumbler.connect(rFilter);
+                    rFilter.connect(rGain);
+                    rGain.connect(crackleGain);
+                    rumbler.start();
+                    rumbler.stop(this.ctx.currentTime + 0.15);
+
+                    setTimeout(playCrackle, delay);
+                };
+
+                playCrackle();
+                return { gain: crackleGain };
+            }
+
+            toggle() {
+                this.init();
+                if (this.isPlaying) {
+                    this.isPlaying = false;
+                    if (this.windNode && this.windNode.source) {
+                        try { this.windNode.source.stop(); } catch(e){}
+                    }
+                    this.ctx.suspend();
+                    showToast("🌲 環境音效已靜音");
+                } else {
+                    this.ctx.resume();
+                    this.isPlaying = true;
+                    this.windNode = this.createWindNode();
+                    this.crackleNode = this.createCampfireNode();
+                    showToast("🔥 野營劈啪環境音已啟動，享受自然！");
+                }
+                updateAudioUI(this.isPlaying);
+            }
+
+            setVolume(val) {
+                if (this.mainGain && this.ctx) {
+                    this.mainGain.gain.setValueAtTime(val, this.ctx.currentTime);
+                }
+            }
+        }
+
+        const synth = new CampfireAudioSynth();
+    </script>
+
+    <header class="fixed top-0 left-0 w-full z-50 transition-all duration-300" id="main-nav">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="glassmorphism rounded-2xl px-6 py-3 flex items-center justify-between shadow-lg">
+                <!-- 品牌 Logo -->
+                <a href="#" class="flex items-center gap-2 group">
+                    <div class="p-2 bg-brand-500 text-stone-100 rounded-xl transition-transform group-hover:rotate-12 duration-300">
+                        <i data-lucide="compass" class="w-6 h-6"></i>
+                    </div>
+                    <span class="font-display font-bold text-2xl tracking-wider text-stone-900 dark:text-stone-50">WILDER</span>
+                </a>
+
+                <!-- 桌機選單 -->
+                <nav class="hidden md:flex items-center gap-8 font-medium">
+                    <a href="#hero" class="hover:text-brand-500 dark:hover:text-brand-100 transition-colors">野營美學</a>
+                    <a href="#quiz" class="hover:text-brand-500 dark:hover:text-brand-100 transition-colors">風格快篩</a>
+                    <a href="#shop" class="hover:text-brand-500 dark:hover:text-brand-100 transition-colors">選物商店</a>
+                    <a href="#community" class="hover:text-brand-500 dark:hover:text-brand-100 transition-colors">生活美學</a>
+                </nav>
+
+                <!-- 互動控制區 -->
+                <div class="flex items-center gap-3">
+                    <!-- 環境音切換器 -->
+                    <button onclick="synth.toggle()" class="p-2.5 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors relative group" title="開啟大自然環境音">
+                        <i data-lucide="volume-x" id="sound-icon" class="w-5 h-5 text-stone-600 dark:text-stone-300"></i>
+                        <span class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">自然環境音</span>
+                    </button>
+
+                    <!-- 深色/淺色模式切換 -->
+                    <button onclick="toggleTheme()" class="p-2.5 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors" title="切換日夜氛圍">
+                        <i data-lucide="sun" id="theme-icon-light" class="w-5 h-5 hidden text-amber-500"></i>
+                        <i data-lucide="moon" id="theme-icon-dark" class="w-5 h-5 text-stone-600 dark:text-stone-300"></i>
+                    </button>
+
+                    <!-- 購物車按鈕 -->
+                    <button onclick="toggleCart()" class="p-2.5 rounded-xl bg-stone-900 text-stone-100 dark:bg-stone-100 dark:text-stone-900 hover:scale-105 transition-all flex items-center gap-2 relative">
+                        <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+                        <span class="hidden sm:inline text-sm font-medium">裝備袋</span>
+                        <span id="cart-count" class="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">0</span>
+                    </button>
+                    
+                    <!-- 行動版選單按鈕 -->
+                    <button onclick="toggleMobileMenu()" class="md:hidden p-2.5 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors">
+                        <i data-lucide="menu" id="mobile-menu-icon" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 行動版下拉選單 -->
+        <div id="mobile-menu" class="hidden md:hidden px-4 pb-4 animate-fade-in">
+            <div class="glassmorphism rounded-2xl p-4 flex flex-col gap-3 font-medium">
+                <a href="#hero" onclick="toggleMobileMenu()" class="p-3 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50">野營美學</a>
+                <a href="#quiz" onclick="toggleMobileMenu()" class="p-3 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50">風格快篩</a>
+                <a href="#shop" onclick="toggleMobileMenu()" class="p-3 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50">選物商店</a>
+                <a href="#community" onclick="toggleMobileMenu()" class="p-3 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50">生活美學</a>
+            </div>
+        </div>
+    </header>
+
+    <section id="hero" class="relative min-h-screen pt-28 flex items-center justify-center overflow-hidden">
+        <!-- 背景漸變、山脈與星空的 SVG 藝術插圖 -->
+        <div class="absolute inset-0 z-0 transition-all duration-1000 bg-gradient-to-b from-orange-100/60 via-amber-50 to-stone-50 dark:from-[#0d151c] dark:via-[#090f14] dark:to-[#0b0f12]"></div>
+        
+        <!-- 主體內容 -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-12">
+            
+            <!-- 左側文字與呼籲語 -->
+            <div class="lg:col-span-5 text-center lg:text-left flex flex-col items-center lg:items-start">
+                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-100 font-medium text-xs uppercase tracking-widest mb-6">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-brand-500 animate-pulse"></i> 2026 頂級戶外潮流選物
+                </div>
+                <h1 class="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-6">
+                    尋回與大地的<br class="hidden sm:inline">
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 to-amber-600 dark:from-brand-500 dark:to-orange-400">極簡共生關係</span>
+                </h1>
+                <p class="text-stone-600 dark:text-stone-300 text-base sm:text-lg mb-8 max-w-md">
+                    WILDER 相信，露營不只是尋求安頓，而是一場對生活美學的極致探索。我們嚴選工藝級的高端戶外器具，讓你在荒野中依舊擁有如居家般的奢華質感。
+                </p>
+                
+                <!-- CTA 按鈕 -->
+                <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                    <a href="#shop" class="px-8 py-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold transition-all shadow-lg hover:shadow-brand-500/20 text-center flex items-center justify-center gap-2 group">
+                        <span>探索野營裝備</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i>
+                    </a>
+                    <a href="#quiz" class="px-8 py-4 rounded-xl glassmorphism hover:bg-stone-200/30 dark:hover:bg-stone-800/30 font-semibold transition-all text-center flex items-center justify-center gap-2">
+                        <span>風格風格快篩</span>
+                        <i data-lucide="sparkles" class="w-5 h-5"></i>
+                    </a>
+                </div>
+
+                <!-- 聲音微控條 -->
+                <div class="mt-8 flex items-center gap-3 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white/40 dark:bg-stone-900/40 backdrop-blur w-full max-w-sm">
+                    <button onclick="synth.toggle()" class="p-2 rounded-lg bg-brand-500 text-white" id="control-play-btn">
+                        <i data-lucide="play" id="audio-control-icon" class="w-4 h-4"></i>
+                    </button>
+                    <div class="flex-1 flex flex-col">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium">營火與微風環境音</span>
+                            <span id="vol-pct">30%</span>
+                        </div>
+                        <input type="range" min="0" max="100" value="30" class="w-full accent-brand-500 cursor-pointer h-1 rounded" id="volume-slider" oninput="changeVolume(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側：高科技、高美感 2D HTML5 Canvas 營火互動場景 -->
+            <div class="lg:col-span-7 flex justify-center relative w-full h-[320px] sm:h-[450px]">
+                <!-- 環境裝飾圈 -->
+                <div class="absolute inset-0 bg-gradient-to-tr from-brand-500/5 to-transparent rounded-full filter blur-3xl animate-pulse-slow"></div>
+                <div class="w-full h-full relative border border-stone-200/50 dark:border-stone-800/50 rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-b from-stone-100 to-white dark:from-[#080d11] dark:to-[#0f171e]">
+                    <!-- Canvas 互動星空與營火 -->
+                    <canvas id="canvas-hero" class="absolute inset-0 w-full h-full z-10"></canvas>
+                    
+                    <!-- 日夜模式提示標籤 -->
+                    <div class="absolute top-4 right-4 z-20 flex items-center gap-2 pointer-events-none">
+                        <span class="px-3 py-1 bg-white/80 dark:bg-black/80 backdrop-blur text-xs font-semibold rounded-lg flex items-center gap-1">
+                            <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-500 animate-spin" style="animation-duration: 8s"></i>
+                            <span id="canvas-theme-label">日間日光</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Canvas 的環境模擬
+        const canvas = document.getElementById('canvas-hero');
+        const ctx = canvas.getContext('2d');
+        
+        let stars = [];
+        let particles = [];
+        let campfireIntensity = 1.0;
+        let isDarkMode = false;
+        
+        // 粒子類別
+        class FireParticle {
+            constructor(x, y) {
+                this.x = x + (Math.random() * 20 - 10);
+                this.y = y;
+                this.vx = Math.random() * 1.5 - 0.75;
+                this.vy = -(Math.random() * 2.5 + 1.5);
+                this.size = Math.random() * 5 + 3;
+                this.maxLife = Math.random() * 50 + 40;
+                this.life = this.maxLife;
+                // 熱烈到燃燒的顏色變化
+                this.color = Math.random() > 0.4 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(245, 158, 11, 0.8)';
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+                this.size *= 0.96; // 逐漸縮小
+                if (Math.random() > 0.8) {
+                    this.vx += Math.random() * 0.4 - 0.2; // 側向微風漂移
+                }
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 初始化星空
+        function initStars(width, height) {
+            stars = [];
+            for (let i = 0; i < 80; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * (height * 0.6),
+                    size: Math.random() * 1.5 + 0.5,
+                    twinkleSpeed: Math.random() * 0.05 + 0.01,
+                    alpha: Math.random()
+                });
+            }
+        }
+
+        function resizeCanvas() {
+            const container = canvas.parentNode;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            initStars(canvas.width, canvas.height);
+        }
+
+        // 當日夜模式改變時重繪部分特徵
+        function setCanvasTheme(isDark) {
+            isDarkMode = isDark;
+            const label = document.getElementById('canvas-theme-label');
+            if (isDark) {
+                label.innerText = "星空野外";
+            } else {
+                label.innerText = "暖陽朝暮";
+            }
+        }
+
+        // Canvas 渲染主迴圈
+        function drawScene() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // 1. 繪製背景漸變色
+            let skyGrad = ctx.createLinearGradient(0, 0, 0, h);
+            if (isDarkMode) {
+                skyGrad.addColorStop(0, '#04080e');
+                skyGrad.addColorStop(0.6, '#0c1524');
+                skyGrad.addColorStop(1, '#111d32');
+            } else {
+                skyGrad.addColorStop(0, '#ffedd5'); // 橘黃
+                skyGrad.addColorStop(0.5, '#fed7aa');
+                skyGrad.addColorStop(1, '#f5ebe0');
+            }
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // 2. 繪製繁星 (僅在夜間顯示)
+            if (isDarkMode) {
+                stars.forEach(star => {
+                    star.alpha += star.twinkleSpeed;
+                    if (star.alpha > 1 || star.alpha < 0) {
+                        star.twinkleSpeed = -star.twinkleSpeed;
+                    }
+                    ctx.fillStyle = `rgba(255, 255, 255, ${Math.abs(star.alpha)})`;
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            } else {
+                // 白天：繪製溫暖的落日/朝陽太陽圈與雲朵
+                let sunGlow = ctx.createRadialGradient(w * 0.8, h * 0.25, 10, w * 0.8, h * 0.25, 120);
+                sunGlow.addColorStop(0, 'rgba(251, 146, 60, 0.45)');
+                sunGlow.addColorStop(1, 'rgba(251, 146, 60, 0)');
+                ctx.fillStyle = sunGlow;
+                ctx.beginPath();
+                ctx.arc(w * 0.8, h * 0.25, 120, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 3. 遠方山巒剪影
+            ctx.fillStyle = isDarkMode ? '#0a0f18' : '#e0cfbe';
+            ctx.beginPath();
+            ctx.moveTo(0, h * 0.75);
+            ctx.quadraticCurveTo(w * 0.25, h * 0.55, w * 0.5, h * 0.7);
+            ctx.quadraticCurveTo(w * 0.75, h * 0.6, w, h * 0.8);
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.fill();
+
+            // 4. 近景小丘、高大杉樹剪影
+            ctx.fillStyle = isDarkMode ? '#05070a' : '#c9b39e';
+            ctx.beginPath();
+            ctx.moveTo(0, h * 0.85);
+            ctx.quadraticCurveTo(w * 0.4, h * 0.8, w * 0.7, h * 0.9);
+            ctx.quadraticCurveTo(w * 0.9, h * 0.85, w, h * 0.92);
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.fill();
+
+            // 繪製三角形極簡杉樹
+            const drawTree = (x, scale, color) => {
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(x, h * 0.88 - (110 * scale));
+                ctx.lineTo(x - (35 * scale), h * 0.88);
+                ctx.lineTo(x + (35 * scale), h * 0.88);
+                ctx.closePath();
+                ctx.fill();
+            };
+            const treeColor = isDarkMode ? '#040507' : '#af977e';
+            drawTree(w * 0.15, 0.9, treeColor);
+            drawTree(w * 0.24, 0.65, treeColor);
+            drawTree(w * 0.85, 0.8, treeColor);
+
+            // 5. 極簡露營帳篷 SVG 手繪風重繪
+            const tentX = w * 0.4;
+            const tentY = h * 0.86;
+            const tentW = 100;
+            const tentH = 65;
+
+            // 帳篷陰影
+            ctx.fillStyle = isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.06)';
+            ctx.beginPath();
+            ctx.ellipse(tentX + 45, tentY, 70, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 帳篷本體 (三角錐)
+            ctx.fillStyle = isDarkMode ? '#e07a5f' : '#81b29a';
+            ctx.beginPath();
+            ctx.moveTo(tentX, tentY);
+            ctx.lineTo(tentX + tentW / 2, tentY - tentH);
+            ctx.lineTo(tentX + tentW, tentY);
+            ctx.closePath();
+            ctx.fill();
+
+            // 帳篷側門剖面 (產生立體感)
+            ctx.fillStyle = isDarkMode ? '#f4a261' : '#f2cc8f';
+            ctx.beginPath();
+            ctx.moveTo(tentX + tentW / 2, tentY - tentH);
+            ctx.lineTo(tentX + tentW * 0.18, tentY);
+            ctx.lineTo(tentX + tentW * 0.5, tentY);
+            ctx.closePath();
+            ctx.fill();
+
+            // 帳篷發光：如果是夜晚，帳篷裡散發出超溫暖的黃橙光
+            if (isDarkMode) {
+                let tentLight = ctx.createRadialGradient(tentX + tentW / 2, tentY - tentH / 3, 5, tentX + tentW / 2, tentY, 40);
+                tentLight.addColorStop(0, 'rgba(253, 224, 71, 0.8)');
+                tentLight.addColorStop(1, 'rgba(253, 224, 71, 0)');
+                ctx.fillStyle = tentLight;
+                ctx.beginPath();
+                ctx.moveTo(tentX + tentW * 0.18, tentY);
+                ctx.lineTo(tentX + tentW / 2, tentY - tentH);
+                ctx.lineTo(tentX + tentW * 0.75, tentY);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // 6. 核心互動：營火堆與動態粒子
+            const fireX = w * 0.62;
+            const fireY = h * 0.88;
+
+            // 柴薪
+            ctx.strokeStyle = '#3d2516';
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(fireX - 15, fireY);
+            ctx.lineTo(fireX + 15, fireY - 6);
+            ctx.moveTo(fireX + 15, fireY);
+            ctx.lineTo(fireX - 15, fireY - 6);
+            ctx.stroke();
+
+            // 營火發光暈 (Glow)
+            let fireGlow = ctx.createRadialGradient(fireX, fireY, 2, fireX, fireY, 50 * campfireIntensity);
+            fireGlow.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
+            fireGlow.addColorStop(0.5, 'rgba(239, 68, 68, 0.15)');
+            fireGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
+            ctx.fillStyle = fireGlow;
+            ctx.beginPath();
+            ctx.arc(fireX, fireY, 60 * campfireIntensity, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 動態產生火粒子
+            let targetCount = synth.isPlaying ? 4 : 2; // 如果放環境音，代表營火燒得很旺！
+            if (Math.random() < 0.3 * targetCount) {
+                particles.push(new FireParticle(fireX, fireY - 4));
+            }
+
+            // 更新與繪製粒子
+            particles = particles.filter(p => {
+                p.update();
+                p.draw();
+                return p.life > 0;
+            });
+
+            // 火苗波動感
+            campfireIntensity += (Math.random() * 0.1 - 0.05);
+            if (campfireIntensity > 1.3) campfireIntensity = 1.3;
+            if (campfireIntensity < 0.7) campfireIntensity = 0.7;
+
+            requestAnimationFrame(drawScene);
+        }
+
+        window.onload = function() {
+            resizeCanvas();
+            setCanvasTheme(document.documentElement.classList.contains('dark'));
+            drawScene();
+            // Lucide 圖示初始化
+            lucide.createIcons();
+        };
+        window.onresize = resizeCanvas;
+    </script>
+
+
+    <section id="quiz" class="py-24 bg-stone-100 dark:bg-[#0e1419]/70 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-80 h-80 bg-brand-500/5 rounded-full filter blur-3xl pointer-events-none"></div>
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 relative z-10">
+            
+            <div class="text-center mb-16">
+                <span class="text-brand-500 font-semibold tracking-wider text-sm uppercase">Smart Gear Matching</span>
+                <h2 class="font-display text-3xl sm:text-4xl font-bold mt-2">尋找你的野營本格裝備包</h2>
+                <p class="text-stone-500 mt-3 max-w-md mx-auto">只需回答三個簡單的問題，AI 將為你組裝一整套最高性價比的高端露營配備。</p>
+            </div>
+
+            <!-- 卡片容器 -->
+            <div class="bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 rounded-3xl p-6 sm:p-10 shadow-xl relative overflow-hidden">
+                <!-- 進度條 -->
+                <div class="w-full bg-stone-100 dark:bg-stone-800 h-1.5 rounded-full mb-8 overflow-hidden">
+                    <div id="quiz-progress" class="bg-brand-500 h-full w-1/3 transition-all duration-300"></div>
+                </div>
+
+                <!-- 題目核心渲染 -->
+                <div id="quiz-question-container">
+                    <!-- 題目一 -->
+                    <div id="q1" class="quiz-step">
+                        <span class="text-xs font-bold text-brand-500 uppercase tracking-widest">問題 01 / 03</span>
+                        <h3 class="font-display text-2xl font-bold mt-2 mb-6 text-stone-900 dark:text-stone-100">你最嚮往哪一種野營旅程？</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <button onclick="nextQuizStep(1, 'solo')" class="flex flex-col items-center justify-center p-6 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group">
+                                <div class="w-12 h-12 rounded-xl bg-brand-100 text-brand-600 dark:bg-brand-900/60 dark:text-brand-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="compass" class="w-6 h-6"></i>
+                                </div>
+                                <span class="font-bold text-base">輕裝單人探索</span>
+                                <span class="text-xs text-stone-400 mt-2 text-center">背負行囊，尋找隱密秘境。</span>
+                            </button>
+                            <button onclick="nextQuizStep(1, 'luxury')" class="flex flex-col items-center justify-center p-6 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group">
+                                <div class="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/60 dark:text-amber-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="sofa" class="w-6 h-6"></i>
+                                </div>
+                                <span class="font-bold text-base">奢華風格 Glamping</span>
+                                <span class="text-xs text-stone-400 mt-2 text-center">美學與舒適並重，注重細節。</span>
+                            </button>
+                            <button onclick="nextQuizStep(1, 'family')" class="flex flex-col items-center justify-center p-6 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group">
+                                <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/60 dark:text-emerald-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                    <i data-lucide="users" class="w-6 h-6"></i>
+                                </div>
+                                <span class="font-bold text-base">多人溫馨家族遊</span>
+                                <span class="text-xs text-stone-400 mt-2 text-center">超大空間，歡笑共享時光。</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 題目二 (動態渲染，點擊時用 JS 切換) -->
+                    <div id="q2" class="quiz-step hidden">
+                        <span class="text-xs font-bold text-brand-500 uppercase tracking-widest">問題 02 / 03</span>
+                        <h3 class="font-display text-2xl font-bold mt-2 mb-6 text-stone-900 dark:text-stone-100">你通常在什麼季節出航露營？</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onclick="nextQuizStep(2, 'warm')" class="flex items-center gap-5 p-5 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group text-left">
+                                <div class="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/60 dark:text-orange-100 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i data-lucide="sun" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-base block">春夏野林</span>
+                                    <span class="text-xs text-stone-400 mt-1">涼爽舒適、防雨防蚊是首選。</span>
+                                </div>
+                            </button>
+                            <button onclick="nextQuizStep(2, 'cold')" class="flex items-center gap-5 p-5 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group text-left">
+                                <div class="w-12 h-12 rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-900/60 dark:text-sky-100 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i data-lucide="snowflake" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-base block">高山雪林</span>
+                                    <span class="text-xs text-stone-400 mt-1">頂級保暖防風，克服極端寒流。</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 題目三 -->
+                    <div id="q3" class="quiz-step hidden">
+                        <span class="text-xs font-bold text-brand-500 uppercase tracking-widest">問題 03 / 03</span>
+                        <h3 class="font-display text-2xl font-bold mt-2 mb-6 text-stone-900 dark:text-stone-100">你的炊事與飲食追求？</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onclick="nextQuizStep(3, 'minimal')" class="flex items-center gap-5 p-5 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group text-left">
+                                <div class="w-12 h-12 rounded-xl bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i data-lucide="coffee" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-base block">輕量即食</span>
+                                    <span class="text-xs text-stone-400 mt-1">超輕快煮，只帶極簡咖啡器。</span>
+                                </div>
+                            </button>
+                            <button onclick="nextQuizStep(3, 'gourmet')" class="flex items-center gap-5 p-5 bg-stone-50 hover:bg-brand-50/50 dark:bg-stone-900/50 dark:hover:bg-brand-900/20 border-2 border-transparent hover:border-brand-500 rounded-2xl transition-all group text-left">
+                                <div class="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/60 dark:text-amber-100 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                                    <i data-lucide="flame" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <span class="font-bold text-base block">野地私廚</span>
+                                    <span class="text-xs text-stone-400 mt-1">煙燻、炙烤，完整鑄鐵鍋與柴火架。</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 結果渲染區 -->
+                    <div id="quiz-result" class="quiz-step hidden">
+                        <div class="text-center py-4">
+                            <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                <i data-lucide="check" class="w-8 h-8"></i>
+                            </div>
+                            <h3 class="font-display text-2xl sm:text-3xl font-bold" id="result-title">為您配對成功：【荒野朝聖行裝】</h3>
+                            <p class="text-stone-500 text-sm mt-2">根據您的回覆，這是為您特調的最佳單品搭配（包含超值風格特價）。</p>
+                        </div>
+
+                        <!-- 推薦單品展示 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8 items-center">
+                            <div class="rounded-2xl overflow-hidden bg-stone-100 dark:bg-stone-900 h-64 relative flex items-center justify-center border border-stone-200 dark:border-stone-800">
+                                <img id="result-img" src="https://placehold.co/600x400/4a6b51/ffffff?text=Solo+Trekker+Kit" alt="推薦套裝" class="w-full h-full object-cover">
+                                <div class="absolute bottom-4 left-4">
+                                    <span class="px-3 py-1 bg-black/70 text-white text-xs font-bold uppercase rounded-lg">WILDER PRO</span>
+                                </div>
+                            </div>
+                            <div class="flex flex-col justify-between h-full">
+                                <div>
+                                    <span class="text-xs text-brand-500 font-bold tracking-widest uppercase">套組包含</span>
+                                    <ul class="text-sm space-y-2 mt-3 text-stone-600 dark:text-stone-300" id="result-items-list">
+                                        <li>・ 輕量碳纖維抗暴風雙人帳</li>
+                                        <li>・ -5℃ 輕羽絨鵝絨睡袋</li>
+                                        <li>・ 太空鈦金屬輕煮器 (含爐具)</li>
+                                    </ul>
+                                </div>
+                                <div class="pt-6 border-t border-stone-200 dark:border-stone-800 mt-6">
+                                    <div class="flex items-baseline gap-3">
+                                        <span class="text-2xl sm:text-3xl font-bold text-brand-500" id="result-price">$12,900</span>
+                                        <span class="text-sm line-through text-stone-400" id="result-original-price">$16,500</span>
+                                        <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">現省 $3,600!</span>
+                                    </div>
+                                    <button id="add-bundle-btn" onclick="addBundleToCart()" class="w-full mt-4 py-3 bg-stone-900 hover:bg-stone-800 text-white dark:bg-stone-100 dark:hover:bg-stone-200 dark:text-stone-900 font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+                                        <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                                        <span>將整套夢幻裝備加入袋</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 重新測試按鈕 -->
+                        <div class="text-center mt-8">
+                            <button onclick="restartQuiz()" class="text-xs font-semibold underline text-stone-400 hover:text-stone-600">重新測試風格</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let quizAnswers = {};
+
+        function nextQuizStep(step, val) {
+            quizAnswers[step] = val;
+            
+            // 隱藏目前步驟
+            document.getElementById(`q${step}`).classList.add('hidden');
+            
+            if (step < 3) {
+                // 顯示下一步
+                const nextStep = step + 1;
+                document.getElementById(`q${nextStep}`).classList.remove('hidden');
+                // 更新進度條
+                document.getElementById('quiz-progress').style.width = (nextStep / 3 * 100) + '%';
+            } else {
+                // 三題完成，運算最終結果
+                calculateQuizResult();
+            }
+        }
+
+        // 推薦套組資料庫
+        const bundles = {
+            solo: {
+                title: "【極致荒野徒步包】",
+                price: 12900,
+                origPrice: 16500,
+                img: "https://placehold.co/600x400/4a6b51/ffffff?text=WILDER+Solo+Pack",
+                items: ["・ 極輕單人防風圓頂帳 (軍綠)", "・ -5℃ 輕羽絨信封睡袋", "・ 鈦金屬折疊杯與快煮爐"],
+                rawId: 'bundle_solo'
+            },
+            luxury: {
+                title: "【美學風格 Glamping 包】",
+                price: 28800,
+                origPrice: 36000,
+                img: "https://placehold.co/600x400/d97706/ffffff?text=Aesthetic+Glamping",
+                items: ["・ 科技棉大型鐘型金字塔帳", "・ 日式胡桃木折疊手提蛋捲桌", "・ 經典手工純銅汽化營燈"],
+                rawId: 'bundle_luxury'
+            },
+            family: {
+                title: "【歡樂闔家極致巨幕包】",
+                price: 38900,
+                origPrice: 48000,
+                img: "https://placehold.co/600x400/1e293b/ffffff?text=Family+Haven",
+                items: ["・ 四室一廳黑膠大型隧道帳", "・ 高規超舒適 TPU 充氣雙人床墊", "・ 鑄鐵多功能料理焚火台"],
+                rawId: 'bundle_family'
+            }
+        };
+
+        function calculateQuizResult() {
+            // 核心演算法：根據第一個選擇做為主線推薦
+            const mainStyle = quizAnswers[1] || 'solo';
+            const choice = bundles[mainStyle];
+
+            // 調整畫面元素
+            document.getElementById('result-title').innerText = `為您配對：${choice.title}`;
+            document.getElementById('result-img').src = choice.img;
+            document.getElementById('result-price').innerText = `$${choice.price.toLocaleString()}`;
+            document.getElementById('result-original-price').innerText = `$${choice.origPrice.toLocaleString()}`;
+            
+            const listEl = document.getElementById('result-items-list');
+            listEl.innerHTML = '';
+            choice.items.forEach(item => {
+                const li = document.createElement('li');
+                li.innerText = item;
+                listEl.appendChild(li);
+            });
+
+            // 保存目前推薦
+            document.getElementById('add-bundle-btn').setAttribute('data-bundle-id', choice.rawId);
+
+            // 顯示結果
+            document.getElementById('quiz-progress').style.width = '100%';
+            document.getElementById('quiz-result').classList.remove('hidden');
+        }
+
+        function restartQuiz() {
+            quizAnswers = {};
+            document.getElementById('quiz-result').classList.add('hidden');
+            document.getElementById('q1').classList.remove('hidden');
+            document.getElementById('quiz-progress').style.width = '33.3%';
+        }
+    </script>
+
+
+    <section id="shop" class="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div class="flex flex-col md:flex-row md:items-end justify-between mb-12">
+            <div>
+                <span class="text-brand-500 font-semibold tracking-wider text-sm uppercase">Curated Catalog</span>
+                <h2 class="font-display text-3xl sm:text-4xl font-bold mt-2">極限選物美學</h2>
+                <p class="text-stone-500 mt-2">耐用、極簡、兼顧頂尖機能，所有裝備皆經多項越野與野營環境驗證。</p>
+            </div>
+            
+            <!-- 篩選 Tab -->
+            <div class="flex gap-2 overflow-x-auto no-scrollbar py-2 mt-6 md:mt-0">
+                <button onclick="filterProducts('all')" class="tab-btn px-5 py-2 rounded-xl bg-stone-900 text-stone-100 dark:bg-stone-100 dark:text-stone-900 font-semibold text-sm transition-all shadow-md">全部選物</button>
+                <button onclick="filterProducts('tents')" class="tab-btn px-5 py-2 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 font-semibold text-sm text-stone-600 dark:text-stone-400 transition-all">帳篷/天幕</button>
+                <button onclick="filterProducts('cooking')" class="tab-btn px-5 py-2 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 font-semibold text-sm text-stone-600 dark:text-stone-400 transition-all">爐具/炊具</button>
+                <button onclick="filterProducts('furniture')" class="tab-btn px-5 py-2 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 font-semibold text-sm text-stone-600 dark:text-stone-400 transition-all">風格桌椅</button>
+                <button onclick="filterProducts('gear')" class="tab-btn px-5 py-2 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 font-semibold text-sm text-stone-600 dark:text-stone-400 transition-all">機能燈具</button>
+            </div>
+        </div>
+
+        <!-- 商品網格 -->
+        <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            <!-- 由 JS 動態繪製，內置 3D 傾斜卡片結構 -->
+        </div>
+    </section>
+
+    <script>
+        const products = [
+            {
+                id: 'p1',
+                name: 'WILDER X1 軍規半球帳',
+                category: 'tents',
+                price: 18900,
+                img: 'https://placehold.co/500x500/1c1d1a/ffffff?text=Semi-Dome+Tent',
+                tag: '經典熱銷',
+                description: '採用航空級 7075 鋁合金骨架，耐風極限高達 10 級。內帳科技棉混紡，完美透氣不結露。'
+            },
+            {
+                id: 'p2',
+                name: '極致輕量鈦金屬炊具組',
+                category: 'cooking',
+                price: 2450,
+                img: 'https://placehold.co/500x500/3c3d3e/ffffff?text=Titanium+Cookware',
+                tag: '輕量必選',
+                description: '超純鈦金屬，全重僅 210 克。導熱快速，無金屬雜味，最適合攀登徒步愛好者。'
+            },
+            {
+                id: 'p3',
+                name: '黑胡桃木戰術折疊桌',
+                category: 'furniture',
+                price: 6800,
+                img: 'https://placehold.co/500x500/2c1f18/ffffff?text=Tactical+Table',
+                tag: '手工藝品',
+                description: '北美黑胡桃原木手工製作。桌邊搭配 1/4 戰術接口，可相容各大品牌燈掛。'
+            },
+            {
+                id: 'p4',
+                name: '工業風無段調光純銅汽化燈',
+                category: 'gear',
+                price: 5200,
+                img: 'https://placehold.co/500x500/c2a649/ffffff?text=Brass+Lantern',
+                tag: '美學極致',
+                description: '傳承古法純手工黃銅汽化燈。獨特呼吸發光感，營造極具靈魂的夜間野營氣氛。'
+            },
+            {
+                id: 'p5',
+                name: '航太鋁野戰戰術椅',
+                category: 'furniture',
+                price: 3600,
+                img: 'https://placehold.co/500x500/232a1a/ffffff?text=Tactical+Chair',
+                tag: '新品上市',
+                description: '人體工學曲線椅背，500D 軍規抗撕裂考杜拉 (Cordura) 面料。可承重達 140kg。'
+            },
+            {
+                id: 'p6',
+                name: '復古鐵道掛牆兩用手提燈',
+                category: 'gear',
+                price: 1850,
+                img: 'https://placehold.co/500x500/181c20/ffffff?text=Retro+Iron+Lantern',
+                tag: '復古風格',
+                description: 'LED 暖色呼吸燈芯，微 Type-C 快速充電，最長可提供 120 小時極限照明。'
+            },
+            {
+                id: 'p7',
+                name: '火山灰全黑極簡焚火台',
+                category: 'cooking',
+                price: 4900,
+                img: 'https://placehold.co/500x500/111111/ffffff?text=Volcano+Firepit',
+                tag: '限量預購',
+                description: '雙層二次燃燒技術，幾乎無煙！附折疊燒烤架，既是暖爐亦是烹飪之魂。'
+            },
+            {
+                id: 'p8',
+                name: 'WILDER 黑膠六角大型天幕',
+                category: 'tents',
+                price: 9800,
+                img: 'https://placehold.co/500x500/2c2c2c/ffffff?text=Hexa+Tarp',
+                tag: '降溫防曬',
+                description: '四層黑膠遮陽塗層，防曬係數 UPF50+。流線幾何裁切，排水抗強風效率卓著。'
+            }
+        ];
+
+        // 渲染商品
+        function renderProducts(filter = 'all') {
+            const grid = document.getElementById('product-grid');
+            grid.innerHTML = '';
+
+            const filtered = filter === 'all' ? products : products.filter(p => p.category === filter);
+
+            filtered.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'tilt-card group bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition-all';
+                card.innerHTML = `
+                    <!-- 商品圖片 -->
+                    <div class="relative overflow-hidden aspect-square bg-stone-100 dark:bg-stone-900 flex items-center justify-center">
+                        <img src="${p.img}" alt="${p.name}" class="object-cover w-full h-full transition-transform duration-500 group-hover:scale-110">
+                        ${p.tag ? `<span class="absolute top-4 left-4 bg-stone-900/90 text-stone-100 dark:bg-stone-100/90 dark:text-stone-900 text-xs px-2.5 py-1 rounded-lg font-bold">${p.tag}</span>` : ''}
+                        
+                        <!-- 快速檢視 / 加入購物車浮動控制 -->
+                        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                            <button onclick="openQuickView('${p.id}')" class="p-3 bg-white hover:bg-stone-100 text-stone-900 rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                                <i data-lucide="eye" class="w-5 h-5"></i>
+                            </button>
+                            <button onclick="addToCart('${p.id}')" class="p-3 bg-brand-500 hover:bg-brand-600 text-white rounded-full shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 delay-75">
+                                <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 資訊區 -->
+                    <div class="p-6 tilt-card-inner">
+                        <span class="text-xs text-brand-500 dark:text-brand-400 font-bold uppercase tracking-wider">${p.category.toUpperCase()}</span>
+                        <h3 class="font-display font-bold text-lg text-stone-900 dark:text-stone-100 mt-1 hover:text-brand-500 transition-colors cursor-pointer" onclick="openQuickView('${p.id}')">${p.name}</h3>
+                        <div class="flex items-center justify-between mt-4">
+                            <span class="font-bold text-xl text-stone-900 dark:text-stone-100">$${p.price.toLocaleString()}</span>
+                            <button onclick="addToCart('${p.id}')" class="text-sm font-semibold flex items-center gap-1.5 text-brand-500 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300">
+                                <span>選購</span>
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            // 重新刷新 Lucide 圖標
+            lucide.createIcons();
+            // 重新啟用 3D 傾斜監聽
+            apply3DTilt();
+        }
+
+        // 商品分類篩選按鈕樣式切換
+        function filterProducts(cat) {
+            renderProducts(cat);
+            const btns = document.querySelectorAll('.tab-btn');
+            btns.forEach(btn => {
+                btn.className = 'tab-btn px-5 py-2 rounded-xl hover:bg-stone-200/50 dark:hover:bg-stone-800/50 font-semibold text-sm text-stone-600 dark:text-stone-400 transition-all';
+            });
+            event.currentTarget.className = 'tab-btn px-5 py-2 rounded-xl bg-stone-900 text-stone-100 dark:bg-stone-100 dark:text-stone-900 font-semibold text-sm transition-all shadow-md';
+        }
+
+        // 3D Parallax 傾斜效果邏輯
+        function apply3DTilt() {
+            // 只在非觸控螢幕啟用，確保行動版體驗極佳
+            if ('ontouchstart' in window) return;
+
+            const cards = document.querySelectorAll('.tilt-card');
+            cards.forEach(card => {
+                card.addEventListener('mousemove', e => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const xc = rect.width / 2;
+                    const yc = rect.height / 2;
+                    const angleX = (yc - y) / 10; // X軸旋轉極限
+                    const angleY = (x - xc) / 10; // Y軸旋轉極限
+                    
+                    card.style.transform = `rotateX(${angleX}deg) rotateY(${angleY}deg) scale(1.02)`;
+                });
+
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'rotateX(0deg) rotateY(0deg) scale(1)';
+                });
+            });
+        }
+    </script>
+
+
+    <section id="community" class="py-24 bg-stone-100 dark:bg-[#0c1014] relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <span class="text-brand-500 font-semibold tracking-wider text-sm uppercase">WILDER Culture</span>
+                <h2 class="font-display text-3xl sm:text-4xl font-bold mt-2">大地共生美學</h2>
+                <p class="text-stone-500 mt-2 max-w-lg mx-auto">分享頂級玩家們在各個極限之境的探險日記。裝備只是載體，故事才是靈魂。</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- 故事卡 1 -->
+                <div class="group overflow-hidden rounded-3xl bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 shadow-md">
+                    <div class="h-60 overflow-hidden relative">
+                        <img src="https://placehold.co/600x400/223326/ffffff?text=Lakeside+Camp" alt="露營故事" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500">
+                        <span class="absolute bottom-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg"># 湖畔野營</span>
+                    </div>
+                    <div class="p-6">
+                        <span class="text-xs text-stone-400">2026年5月 ∙ 大禹嶺山脈</span>
+                        <h3 class="font-display font-bold text-xl text-stone-900 dark:text-stone-100 mt-2 group-hover:text-brand-500 transition-colors">晨霧中的極致寂靜：頂級帳篷越野測試</h3>
+                        <p class="text-stone-500 text-sm mt-3 line-clamp-2">在大雪山深處的湖泊旁，氣溫逼近零下三度。多虧了 X1 圓頂帳的雙層抗結露材質，晨曦在營帳頂上結起霜，而帳內依然保暖而乾燥...</p>
+                        <div class="flex items-center gap-3 mt-6 pt-6 border-t border-stone-100 dark:border-stone-800/60">
+                            <div class="w-8 h-8 rounded-full bg-stone-300 overflow-hidden">
+                                <img src="https://placehold.co/100x100/4a6b51/ffffff?text=U" alt="頭像" class="w-full h-full">
+                            </div>
+                            <span class="text-xs font-bold">阿強 ∙ 戶外攝影師</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 故事卡 2 -->
+                <div class="group overflow-hidden rounded-3xl bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 shadow-md">
+                    <div class="h-60 overflow-hidden relative">
+                        <img src="https://placehold.co/600x400/d97706/ffffff?text=Forest+Kitchen" alt="露營故事" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500">
+                        <span class="absolute bottom-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg"># 野地炊事</span>
+                    </div>
+                    <div class="p-6">
+                        <span class="text-xs text-stone-400">2026年4月 ∙ 阿里山林道</span>
+                        <h3 class="font-display font-bold text-xl text-stone-900 dark:text-stone-100 mt-2 group-hover:text-brand-500 transition-colors">山林中的星級私廚：鑄鐵鍋與柴火美學</h3>
+                        <p class="text-stone-500 text-sm mt-3 line-clamp-2">當木柴在全黑焚火台內以二次燃燒發出清脆劈啪聲，我們將香草牛排靜置於鑄鐵烤盤上。沒有瓦斯干擾，只有最純粹的高溫炙燒與白櫟木煙燻風味...</p>
+                        <div class="flex items-center gap-3 mt-6 pt-6 border-t border-stone-100 dark:border-stone-800/60">
+                            <div class="w-8 h-8 rounded-full bg-stone-300 overflow-hidden">
+                                <img src="https://placehold.co/100x100/d97706/ffffff?text=M" alt="頭像" class="w-full h-full">
+                            </div>
+                            <span class="text-xs font-bold">Mila ∙ 野地料理主廚</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 故事卡 3 -->
+                <div class="group overflow-hidden rounded-3xl bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 shadow-md">
+                    <div class="h-60 overflow-hidden relative">
+                        <img src="https://placehold.co/600x400/1e293b/ffffff?text=Night+Vibe" alt="露營故事" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500">
+                        <span class="absolute bottom-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-sm text-white text-xs rounded-lg"># 營火哲學</span>
+                    </div>
+                    <div class="p-6">
+                        <span class="text-xs text-stone-400">2026年6月 ∙ 宜蘭神秘海岸</span>
+                        <h3 class="font-display font-bold text-xl text-stone-900 dark:text-stone-100 mt-2 group-hover:text-brand-500 transition-colors">汽化燈點亮孤獨：夜間光學美學實踐</h3>
+                        <p class="text-stone-500 text-sm mt-3 line-clamp-2">海浪陣陣。點燃黃銅汽化燈那一刻，暖光以一種極為溫柔的波動節奏，照亮了方圓三米的沙灘。在無電的野地，我們用光線定義了「家」的存在...</p>
+                        <div class="flex items-center gap-3 mt-6 pt-6 border-t border-stone-100 dark:border-stone-800/60">
+                            <div class="w-8 h-8 rounded-full bg-stone-300 overflow-hidden">
+                                <img src="https://placehold.co/100x100/1e293b/ffffff?text=K" alt="頭像" class="w-full h-full">
+                            </div>
+                            <span class="text-xs font-bold">Ken ∙ 空間設計師</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- 1. 購物車 Slider -->
+    <div id="cart-slider" class="fixed inset-y-0 right-0 w-full sm:w-[450px] z-50 transform translate-x-full transition-transform duration-300 ease-in-out bg-white dark:bg-[#0c1116] border-l border-stone-200 dark:border-stone-800 shadow-2xl flex flex-col">
+        <!-- 購物車頭 -->
+        <div class="p-6 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="shopping-bag" class="w-5 h-5 text-brand-500"></i>
+                <h3 class="font-display font-bold text-xl">已選備忘袋</h3>
+            </div>
+            <button onclick="toggleCart()" class="p-2 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- 購物車清單 -->
+        <div id="cart-items" class="flex-1 overflow-y-auto p-6 space-y-4">
+            <!-- 購物車卡片由 JS 動態嵌入 -->
+            <div id="empty-cart-state" class="h-full flex flex-col items-center justify-center text-stone-400">
+                <i data-lucide="package-open" class="w-16 h-16 stroke-1 mb-4 text-stone-300"></i>
+                <p class="text-sm font-semibold">你的裝備袋空無一物</p>
+                <p class="text-xs text-stone-400 mt-1">選購一些高端露營器具，開啟大自然之旅吧！</p>
+            </div>
+        </div>
+
+        <!-- 折扣與結帳 -->
+        <div class="p-6 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/40">
+            <!-- 折扣碼區 -->
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="promo-input" placeholder="輸入折扣碼 WILDER2026" class="flex-1 px-4 py-2 bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 rounded-xl text-sm focus:outline-none focus:border-brand-500">
+                <button onclick="applyPromoCode()" class="px-4 py-2 bg-stone-900 text-stone-100 dark:bg-stone-100 dark:text-stone-900 rounded-xl text-xs font-bold hover:scale-105 transition-transform">套用</button>
+            </div>
+
+            <!-- 計算價格 -->
+            <div class="space-y-2 text-sm mb-6">
+                <div class="flex justify-between">
+                    <span class="text-stone-500">裝備小計</span>
+                    <span id="subtotal-price" class="font-semibold">$0</span>
+                </div>
+                <div class="flex justify-between text-red-500 hidden" id="promo-row">
+                    <span>活動折扣 (15% OFF)</span>
+                    <span id="discount-price">-$0</span>
+                </div>
+                <div class="flex justify-between border-t border-stone-200 dark:border-stone-800 pt-3 text-base">
+                    <span class="font-bold">總金額</span>
+                    <span id="total-price" class="font-bold text-lg text-brand-500">$0</span>
+                </div>
+            </div>
+
+            <!-- 模擬結帳按鈕 -->
+            <button onclick="checkout()" class="w-full py-4 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-brand-500/20 flex items-center justify-center gap-2">
+                <i data-lucide="credit-card" class="w-5 h-5"></i>
+                <span>送出訂單 ∙ 模擬安全結帳</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- 購物車遮罩背景 -->
+    <div id="cart-overlay" onclick="toggleCart()" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden transition-opacity"></div>
+
+
+    <!-- 2. 商品快速詳情彈窗 Quick View Modal -->
+    <div id="quickview-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <!-- 點擊遮罩關閉 -->
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeQuickView()"></div>
+        
+        <!-- 彈窗內容 -->
+        <div class="bg-white dark:bg-[#121920] border border-stone-200 dark:border-stone-800 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl relative z-10 animate-scale-up">
+            <button onclick="closeQuickView()" class="absolute top-4 right-4 p-2 bg-stone-100 dark:bg-stone-800 rounded-full hover:scale-105 transition-transform">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="grid grid-cols-1 md:grid-cols-2">
+                <!-- 產品大圖 -->
+                <div class="bg-stone-100 dark:bg-stone-900 h-64 md:h-full flex items-center justify-center">
+                    <img id="modal-img" src="" alt="商品" class="object-cover w-full h-full">
+                </div>
+                <!-- 規格描述 -->
+                <div class="p-6 sm:p-8 flex flex-col justify-between">
+                    <div>
+                        <span id="modal-cat" class="text-xs font-bold text-brand-500 uppercase tracking-widest">TENTS</span>
+                        <h3 id="modal-title" class="font-display text-2xl font-bold text-stone-900 dark:text-stone-100 mt-2">WILDER X1 軍規帳篷</h3>
+                        <p id="modal-price" class="text-xl font-bold mt-2 text-brand-500">$18,900</p>
+                        <p id="modal-desc" class="text-stone-500 text-sm mt-4 leading-relaxed">這是關於帳篷的細緻產品說明。採用超強防雨指數，能完全隔絕外在冷空氣...</p>
+                    </div>
+
+                    <div class="mt-8">
+                        <button id="modal-add-btn" class="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white dark:bg-stone-100 dark:hover:bg-stone-200 dark:text-stone-900 font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+                            <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                            <span>加入購物車</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+        <!-- JS 動態插入 Toast 提示卡 -->
+    </div>
+
+
+    <script>
+        // 1. 全域購物車狀態
+        let cart = [];
+        let isPromoApplied = false;
+
+        // 音量微調
+        function changeVolume(val) {
+            const pct = val + '%';
+            document.getElementById('vol-pct').innerText = pct;
+            synth.setVolume(val / 100);
+        }
+
+        function updateAudioUI(playing) {
+            const icon = document.getElementById('sound-icon');
+            const ctrlIcon = document.getElementById('audio-control-icon');
+            const ctrlBtn = document.getElementById('control-play-btn');
+
+            if (playing) {
+                icon.setAttribute('data-lucide', 'volume-2');
+                ctrlIcon.setAttribute('data-lucide', 'pause');
+                ctrlBtn.classList.add('bg-amber-500');
+                ctrlBtn.classList.remove('bg-brand-500');
+            } else {
+                icon.setAttribute('data-lucide', 'volume-x');
+                ctrlIcon.setAttribute('data-lucide', 'play');
+                ctrlBtn.classList.add('bg-brand-500');
+                ctrlBtn.classList.remove('bg-amber-500');
+            }
+            lucide.createIcons();
+        }
+
+        // 2. 顯示 Toast 訊息
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'px-4 py-3 bg-stone-900 text-white dark:bg-white dark:text-stone-900 shadow-xl rounded-xl text-sm font-semibold flex items-center gap-2 pointer-events-auto transform translate-y-4 opacity-0 transition-all duration-300';
+            
+            let iconStr = '<i data-lucide="info" class="w-4 h-4 text-blue-400"></i>';
+            if (type === 'success') {
+                iconStr = '<i data-lucide="check-circle" class="w-4 h-4 text-green-400"></i>';
+            } else if (type === 'warning') {
+                iconStr = '<i data-lucide="alert-triangle" class="w-4 h-4 text-yellow-400"></i>';
+            }
+
+            toast.innerHTML = `${iconStr} <span>${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            // 動態淡入
+            setTimeout(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            }, 50);
+
+            // 3秒後自動消失
+            setTimeout(() => {
+                toast.classList.add('translate-y-4', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // 3. 購物車核心邏輯
+        function toggleCart() {
+            const slider = document.getElementById('cart-slider');
+            const overlay = document.getElementById('cart-overlay');
+            slider.classList.toggle('translate-x-full');
+            overlay.classList.toggle('hidden');
+        }
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const icon = document.getElementById('mobile-menu-icon');
+            menu.classList.toggle('hidden');
+            if (menu.classList.contains('hidden')) {
+                icon.setAttribute('data-lucide', 'menu');
+            } else {
+                icon.setAttribute('data-lucide', 'x');
+            }
+            lucide.createIcons();
+        }
+
+        // 加入單件商品至購物車
+        function addToCart(productId) {
+            const prod = products.find(p => p.id === productId);
+            if (!prod) return;
+
+            const existing = cart.find(item => item.id === productId);
+            if (existing) {
+                existing.quantity += 1;
+            } else {
+                cart.push({ ...prod, quantity: 1 });
+            }
+
+            updateCartUI();
+            showToast(`已成功將【${prod.name}】放進備忘袋`);
+        }
+
+        // 推薦套組一次加入購物車 (帶折價包)
+        function addBundleToCart() {
+            const btn = document.getElementById('add-bundle-btn');
+            const bundleId = btn.getAttribute('data-bundle-id');
+
+            let bundleName = "推薦露營套組";
+            let price = 12900;
+            let img = "https://placehold.co/500x500/4a6b51/ffffff?text=Solo+Pack";
+
+            if (bundleId === 'bundle_luxury') {
+                bundleName = "美學風格 Glamping 套組";
+                price = 28800;
+                img = "https://placehold.co/500x500/d97706/ffffff?text=Aesthetic+Glamping";
+            } else if (bundleId === 'bundle_family') {
+                bundleName = "歡樂闔家極致巨幕套組";
+                price = 38900;
+                img = "https://placehold.co/500x500/1e293b/ffffff?text=Family+Haven";
+            }
+
+            // 虛擬一個套件產品加入購物車
+            const existing = cart.find(item => item.id === bundleId);
+            if (existing) {
+                existing.quantity += 1;
+            } else {
+                cart.push({
+                    id: bundleId,
+                    name: bundleName,
+                    price: price,
+                    img: img,
+                    category: '套組折扣',
+                    quantity: 1
+                });
+            }
+
+            updateCartUI();
+            showToast(`🎉 成功將全套【${bundleName}】超值組一鍵裝進備忘袋！`);
+            toggleCart(); // 滑出購物車讓顧客確認
+        }
+
+        function updateCartCount(amount) {
+            const existing = cart.find(item => item.id === amount.id);
+            if (!existing) return;
+            
+            existing.quantity += amount.change;
+            if (existing.quantity <= 0) {
+                cart = cart.filter(item => item.id !== amount.id);
+            }
+            updateCartUI();
+        }
+
+        // 刷新購物車面板 UI
+        function updateCartUI() {
+            const container = document.getElementById('cart-items');
+            const countBadge = document.getElementById('cart-count');
+            
+            // 計算總數量
+            const totalQty = cart.reduce((acc, curr) => acc + curr.quantity, 0);
+            countBadge.innerText = totalQty;
+
+            // 渲染購物車內品項
+            container.innerHTML = '';
+            
+            if (cart.length === 0) {
+                container.innerHTML = `
+                    <div id="empty-cart-state" class="h-full flex flex-col items-center justify-center text-stone-400 py-12">
+                        <i data-lucide="package-open" class="w-16 h-16 stroke-1 mb-4 text-stone-300"></i>
+                        <p class="text-sm font-semibold">你的裝備袋空無一物</p>
+                        <p class="text-xs text-stone-400 mt-1">選購一些高端露營器具，開啟大自然之旅吧！</p>
+                    </div>
+                `;
+                lucide.createIcons();
+            } else {
+                cart.forEach(item => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'flex gap-4 p-3 bg-stone-50 dark:bg-stone-900/60 rounded-2xl border border-stone-100 dark:border-stone-800/80 items-center animate-scale-up';
+                    itemEl.innerHTML = `
+                        <img src="${item.img}" alt="${item.name}" class="w-16 h-16 object-cover rounded-xl bg-stone-100 dark:bg-stone-800">
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-bold text-sm truncate text-stone-900 dark:text-stone-100">${item.name}</h4>
+                            <p class="text-xs text-stone-400 mt-0.5">${item.category}</p>
+                            <span class="font-bold text-brand-500 text-sm mt-2 block">$${item.price.toLocaleString()}</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-1.5">
+                            <button onclick="updateCartCount({id: '${item.id}', change: 1})" class="p-1 hover:bg-stone-200 dark:hover:bg-stone-800 rounded">
+                                <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                            </button>
+                            <span class="text-sm font-bold px-1">${item.quantity}</span>
+                            <button onclick="updateCartCount({id: '${item.id}', change: -1})" class="p-1 hover:bg-stone-200 dark:hover:bg-stone-800 rounded">
+                                <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(itemEl);
+                });
+                lucide.createIcons();
+            }
+
+            // 計算最終價格
+            calculateFinalPrice();
+        }
+
+        // 計算價格
+        function calculateFinalPrice() {
+            const subtotal = cart.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+            document.getElementById('subtotal-price').innerText = `$${subtotal.toLocaleString()}`;
+
+            const promoRow = document.getElementById('promo-row');
+            let finalPrice = subtotal;
+
+            if (isPromoApplied && subtotal > 0) {
+                promoRow.classList.remove('hidden');
+                const discount = Math.round(subtotal * 0.15);
+                document.getElementById('discount-price').innerText = `-$${discount.toLocaleString()}`;
+                finalPrice = subtotal - discount;
+            } else {
+                promoRow.classList.add('hidden');
+            }
+
+            document.getElementById('total-price').innerText = `$${finalPrice.toLocaleString()}`;
+        }
+
+        // 套用折扣碼
+        function applyPromoCode() {
+            const val = document.getElementById('promo-input').value.trim().toUpperCase();
+            if (val === 'WILDER2026') {
+                isPromoApplied = true;
+                calculateFinalPrice();
+                showToast("🎫 折扣碼套用成功：全館 15% 優惠折扣！");
+            } else {
+                showToast("❌ 折扣碼無效或已過期", "warning");
+            }
+        }
+
+        // 模擬結帳（使用 Canvas Confetti 灑花效果）
+        function checkout() {
+            if (cart.length === 0) {
+                showToast("🛒 購物袋是空的，請先挑選喜歡的露營裝備！", "warning");
+                return;
+            }
+
+            // 動畫灑花
+            confetti({
+                particleCount: 150,
+                spread: 80,
+                origin: { y: 0.6 }
+            });
+
+            showToast("🏕️ 模擬訂單建立成功！感謝您的探險美學品味。");
+            
+            // 清空購物車
+            cart = [];
+            isPromoApplied = false;
+            document.getElementById('promo-input').value = '';
+            updateCartUI();
+            toggleCart();
+        }
+
+        // 4. 快速檢視 Quick View Modal 邏輯
+        function openQuickView(productId) {
+            const prod = products.find(p => p.id === productId);
+            if (!prod) return;
+
+            document.getElementById('modal-img').src = prod.img;
+            document.getElementById('modal-cat').innerText = prod.category.toUpperCase();
+            document.getElementById('modal-title').innerText = prod.name;
+            document.getElementById('modal-price').innerText = `$${prod.price.toLocaleString()}`;
+            document.getElementById('modal-desc').innerText = prod.description;
+
+            // 綁定購物車按鈕點擊
+            const btn = document.getElementById('modal-add-btn');
+            btn.onclick = () => {
+                addToCart(prod.id);
+                closeQuickView();
+            };
+
+            document.getElementById('quickview-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeQuickView() {
+            document.getElementById('quickview-modal').classList.add('hidden');
+        }
+
+        // 5. 日夜模式切換與同步 Canvas 機制
+        function toggleTheme() {
+            const doc = document.documentElement;
+            doc.classList.toggle('dark');
+            const isDark = doc.classList.contains('dark');
+            
+            // 更新圖示
+            const sunIcon = document.getElementById('theme-icon-light');
+            const moonIcon = document.getElementById('theme-icon-dark');
+            if (isDark) {
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+                showToast("🌙 夜間星空氛圍已開啟");
+            } else {
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+                showToast("☀️ 溫暖朝陽氛圍已開啟");
+            }
+
+            // 同步 Canvas 場景渲染
+            setCanvasTheme(isDark);
+        }
+
+        // 滾動效果: 導覽列毛玻璃加深
+        window.addEventListener('scroll', () => {
+            const nav = document.getElementById('main-nav');
+            if (window.scrollY > 20) {
+                nav.classList.add('py-2');
+                nav.classList.remove('py-4');
+            } else {
+                nav.classList.add('py-4');
+                nav.classList.remove('py-2');
+            }
+        });
+
+        // 啟動首次商品渲染
+        renderProducts();
+    </script>
+
+    <footer class="bg-stone-900 text-stone-400 dark:bg-[#06080b] py-16 border-t border-stone-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-4 gap-12">
+            <div>
+                <a href="#" class="flex items-center gap-2 mb-6">
+                    <div class="p-2 bg-brand-500 text-stone-100 rounded-xl">
+                        <i data-lucide="compass" class="w-6 h-6"></i>
+                    </div>
+                    <span class="font-display font-bold text-2xl tracking-wider text-white">WILDER</span>
+                </a>
+                <p class="text-sm leading-relaxed">我們在水泥叢林中為您開闢一扇門。選上一件匠心之作，重拾與大地的寧靜連結。</p>
+                <div class="flex gap-4 mt-6">
+                    <a href="#" class="p-2 bg-stone-800 hover:bg-brand-500 hover:text-white rounded-lg transition-colors"><i data-lucide="instagram" class="w-5 h-5"></i></a>
+                    <a href="#" class="p-2 bg-stone-800 hover:bg-brand-500 hover:text-white rounded-lg transition-colors"><i data-lucide="facebook" class="w-5 h-5"></i></a>
+                    <a href="#" class="p-2 bg-stone-800 hover:bg-brand-500 hover:text-white rounded-lg transition-colors"><i data-lucide="youtube" class="w-5 h-5"></i></a>
+                </div>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-white mb-6">探索野營</h4>
+                <ul class="space-y-3 text-sm">
+                    <li><a href="#shop" class="hover:text-white transition-colors">最新到貨高端帳篷</a></li>
+                    <li><a href="#shop" class="hover:text-white transition-colors">手工限量黃銅汽化燈</a></li>
+                    <li><a href="#shop" class="hover:text-white transition-colors">輕羽絨極地保暖睡袋</a></li>
+                    <li><a href="#quiz" class="hover:text-white transition-colors">智能裝備風格選包推薦</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-white mb-6">客服支援</h4>
+                <ul class="space-y-3 text-sm">
+                    <li><a href="#" class="hover:text-white transition-colors">裝備保養與終身保固計畫</a></li>
+                    <li><a href="#" class="hover:text-white transition-colors">7天荒野環境試用與退換服務</a></li>
+                    <li><a href="#" class="hover:text-white transition-colors">GitHub Pages 快速部署指南</a></li>
+                    <li><a href="#" class="hover:text-white transition-colors">跨國越野探險運送條款</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-white mb-6">訂閱 WILDER 風格通訊</h4>
+                <p class="text-xs mb-4">第一時間獲取野營美學靈感與限量款裝備到貨通知。</p>
+                <div class="flex gap-2">
+                    <input type="email" placeholder="輸入您的 Email" class="px-4 py-2 bg-stone-800 border border-stone-700 rounded-xl text-sm w-full text-white focus:outline-none focus:border-brand-500">
+                    <button onclick="showToast('📧 感謝您的訂閱！野營美學誌將每週寄送。')" class="p-2.5 bg-brand-500 text-white rounded-xl hover:bg-brand-600 transition-colors"><i data-lucide="arrow-right" class="w-5 h-5"></i></button>
+                </div>
+                <p class="text-xs text-stone-500 mt-3">輸入折扣碼 <span class="text-brand-400 font-bold">WILDER2026</span> 享裝備袋一鍵折價 15%。</p>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 mt-12 border-t border-stone-800 text-center text-xs text-stone-500 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p>© 2026 WILDER Premium Outdoors Inc. 版權所有。專為 GitHub Pages 部署優化。</p>
+            <div class="flex gap-6">
+                <a href="#" class="hover:text-stone-300">隱私權政策</a>
+                <a href="#" class="hover:text-stone-300">服務條款</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
